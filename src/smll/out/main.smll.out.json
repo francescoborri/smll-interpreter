@@ -1,0 +1,110 @@
+{
+    "children": [
+        {
+            "children": [
+                "i",
+                {
+                    "children": [
+                        {
+                            "children": [],
+                            "kind": 20,
+                            "token": "0"
+                        }
+                    ],
+                    "kind": 9
+                }
+            ],
+            "kind": 17
+        },
+        {
+            "children": [
+                {
+                    "children": [
+                        {
+                            "children": [
+                                "i"
+                            ],
+                            "kind": 10
+                        },
+                        "<",
+                        {
+                            "children": [
+                                {
+                                    "children": [],
+                                    "kind": 20,
+                                    "token": "10"
+                                }
+                            ],
+                            "kind": 9
+                        }
+                    ],
+                    "kind": 12
+                },
+                {
+                    "children": [
+                        {
+                            "children": [
+                                "i",
+                                {
+                                    "children": [
+                                        {
+                                            "children": [
+                                                "i"
+                                            ],
+                                            "kind": 10
+                                        },
+                                        "+",
+                                        {
+                                            "children": [
+                                                {
+                                                    "children": [],
+                                                    "kind": 20,
+                                                    "token": "1"
+                                                }
+                                            ],
+                                            "kind": 9
+                                        }
+                                    ],
+                                    "kind": 12
+                                }
+                            ],
+                            "kind": 3
+                        },
+                        {
+                            "children": [
+                                {
+                                    "children": [],
+                                    "kind": 0
+                                },
+                                {
+                                    "children": [
+                                        {
+                                            "children": [
+                                                {
+                                                    "children": [
+                                                        "i"
+                                                    ],
+                                                    "kind": 10
+                                                }
+                                            ],
+                                            "kind": 7
+                                        },
+                                        {
+                                            "children": [],
+                                            "kind": 0
+                                        }
+                                    ],
+                                    "kind": 2
+                                }
+                            ],
+                            "kind": 2
+                        }
+                    ],
+                    "kind": 2
+                }
+            ],
+            "kind": 6
+        }
+    ],
+    "kind": 1
+}
