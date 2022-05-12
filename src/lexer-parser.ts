@@ -1,4 +1,5 @@
 import { Parser } from 'jison'
+import { SmLLError, SmLLErrorKind } from './error'
 
 export namespace AbstractSyntaxTree {
 	export enum CommandKind {
@@ -42,45 +43,74 @@ export namespace AbstractSyntaxTree {
 		BINARY_OPERATOR
 	}
 
-	export type Identificator = string
-	export type UnaryOperator = '!' | '+' | '-'
-	export type BinaryOperator = '&&' | '||' | '+' | '-' | '*' | '/' | '//' | '%' | '>' | '<' | '>=' | '<=' | '==' | '!='
-	export type Value = boolean | number
-	export type Type = 'Number' | 'Boolean'
-
 	export type Kind = CommandKind | ExpressionKind | DeclarationKind | ValueKind | TypeKind | OperatorKind
 
-	export class Node {
+	export const VALID_IDENTIFICATOR_REGEX: string = '[a-zA-Z_][a-zA-Z0-9_]*'
+	export type Identificator = string
+
+	export type Value = boolean | number
+	export type Type = 'num' | 'bool'
+
+	export type Operator = UnaryOperator | BinaryOperator
+	export type UnaryOperator = '!' | '+' | '-'
+	export type BinaryOperator = '&&' | '||' | '+' | '-' | '*' | '/' | '//' | '%' | '^' | '>' | '<' | '>=' | '<=' | '==' | '!='
+
+	const VALUE_KIND_TO_TYPE: Map<ValueKind, Type> = new Map<ValueKind, Type>([
+		[ValueKind.BOOLEAN, 'bool'],
+		[ValueKind.NUMBER, 'num']
+	])
+
+	export class Block {
+		firstLine: number
+		lastLine: number
+		firstColumn: number
+		lastColumn: number
+
+		constructor(firstLine: number, lastLine: number, firstColumn: number, lastColumn: number) {
+			this.firstLine = firstLine
+			this.lastLine = lastLine
+			this.firstColumn = firstColumn
+			this.lastColumn = lastColumn
+		}
+
+		union(block: Block): Block {
+			return new Block(this.firstLine, block.lastLine, this.firstColumn, block.lastColumn)
+		}
+	}
+
+	export abstract class Node {
 		children: Node[]
 		kind: Kind
+		block: Block
 
-		constructor(children: Node[], kind: Kind) {
+		constructor(children: Node[], kind: Kind, block: Block) {
 			this.children = children
 			this.kind = kind
+			this.block = block
 		}
 	}
 
 	export class CommandNode extends Node {
 		declare kind: CommandKind
 
-		constructor(children: Node[], kind: CommandKind) {
-			super(children, kind)
+		constructor(children: Node[], kind: CommandKind, block: Block) {
+			super(children, kind, block)
 		}
 	}
 
 	export class DeclarationNode extends Node {
 		declare kind: DeclarationKind
 
-		constructor(children: Node[], kind: DeclarationKind) {
-			super(children, kind)
+		constructor(children: Node[], kind: DeclarationKind, block: Block) {
+			super(children, kind, block)
 		}
 	}
 
 	export class ExpressionNode extends Node {
 		declare kind: ExpressionKind
 
-		constructor(children: Node[], kind: ExpressionKind) {
-			super(children, kind)
+		constructor(children: Node[], kind: ExpressionKind, block: Block) {
+			super(children, kind, block)
 		}
 	}
 
@@ -89,36 +119,42 @@ export namespace AbstractSyntaxTree {
 		value: Value
 		type: Type
 
-		constructor(value: Value, type: Type, kind: ValueKind) {
-			super([], kind)
+		constructor(value: Value, kind: ValueKind, block: Block) {
+			super([], kind, block)
 			this.value = value
-			this.type = type
-		}
-	}
-
-	export class IdentificatorNode extends ExpressionNode {
-		identificator: Identificator
-
-		constructor(identificator: Identificator) {
-			super([], ExpressionKind.IDENTIFICATOR)
-			this.identificator = identificator
+			this.type = VALUE_KIND_TO_TYPE.get(kind)!
 		}
 	}
 
 	export class TypeNode extends Node {
 		declare kind: TypeKind
 
-		constructor(kind: TypeKind) {
-			super([], kind)
+		constructor(kind: TypeKind, block: Block) {
+			super([], kind, block)
 		}
 	}
 
-	export class OperatorNode extends Node {
-		declare kind: OperatorKind
-		operator: BinaryOperator | UnaryOperator
+	export class IdentificatorNode extends ExpressionNode {
+		identificator: Identificator
 
-		constructor(operator: BinaryOperator | UnaryOperator, kind: OperatorKind) {
-			super([], kind)
+		constructor(identificator: Identificator, block: Block) {
+			super([], ExpressionKind.IDENTIFICATOR, block)
+			this.identificator = identificator
+			this.validate()
+		}
+
+		validate(): void {
+			if (this.identificator.match(new RegExp(VALID_IDENTIFICATOR_REGEX)) === null)
+				throw new SmLLError(`invalid identificator ${this.identificator}`, SmLLErrorKind.LEXICAL_ERROR, this.block.firstLine, this.block.firstColumn)
+		}
+	}
+
+	export abstract class OperatorNode extends Node {
+		declare kind: OperatorKind
+		operator: Operator
+
+		constructor(operator: BinaryOperator | UnaryOperator, kind: OperatorKind, block: Block) {
+			super([], kind, block)
 			this.operator = operator
 		}
 	}
@@ -126,12 +162,10 @@ export namespace AbstractSyntaxTree {
 	export class UnaryOperatorNode extends OperatorNode {
 		declare operator: UnaryOperator
 		operand: ExpressionNode
-		operandType: Type
 
-		constructor(operand: ExpressionNode, operandType: Type, operator: UnaryOperator) {
-			super(operator, OperatorKind.UNARY_OPERATOR)
+		constructor(operand: ExpressionNode, operator: UnaryOperator, block: Block) {
+			super(operator, OperatorKind.UNARY_OPERATOR, block)
 			this.operand = operand
-			this.operandType = operandType
 		}
 	}
 
@@ -139,15 +173,11 @@ export namespace AbstractSyntaxTree {
 		declare operator: BinaryOperator
 		leftOperand: ExpressionNode
 		rightOperand: ExpressionNode
-		leftOperandType: Type
-		rightOperandType: Type
 
-		constructor(leftOperand: ExpressionNode, rightOperand: ExpressionNode, leftOperandType: Type, rightOperandType: Type, operator: BinaryOperator) {
-			super(operator, OperatorKind.BINARY_OPERATOR)
+		constructor(leftOperand: ExpressionNode, rightOperand: ExpressionNode, operator: BinaryOperator, block: Block) {
+			super(operator, OperatorKind.BINARY_OPERATOR, block)
 			this.leftOperand = leftOperand
 			this.rightOperand = rightOperand
-			this.leftOperandType = leftOperandType
-			this.rightOperandType = rightOperandType
 		}
 	}
 }
@@ -155,11 +185,12 @@ export namespace AbstractSyntaxTree {
 export const GRAMMAR = {
 	'lex': {
 		'rules': [
-			['[\\t\\r\\f ]+', '/* skip whitespace */'],
+			['[\\t\\r\\f ]+', '/* skip blank characters except \\n */'],
 
-			['const', "return 'CONST'"],
 			['let', "return 'LET'"],
+			['const', "return 'CONST'"],
 			['if', "return 'IF'"],
+			['then', "return 'THEN'"],
 			['else', "return 'ELSE'"],
 			['while', "return 'WHILE'"],
 			['do', "return 'DO'"],
@@ -180,7 +211,7 @@ export const GRAMMAR = {
 			['>=', "return '>='"],
 			['<=', "return '<='"],
 			['==', "return '=='"],
-			['!="', "return '!='"],
+			['!=', "return '!='"],
 			['!', "return 'NOT'"],
 			['>', "return '>'"],
 			['<', "return '<'"],
@@ -194,13 +225,13 @@ export const GRAMMAR = {
 			['\\%', "return '%'"],
 			['\\^', "return '^'"],
 
-			['Boolean', "return 'BOOLEAN_TYPE'"],
-			['Number', "return 'NUMBER_TYPE'"],
+			['bool', "return 'BOOLEAN_TYPE'"],
+			['num', "return 'NUMBER_TYPE'"],
 
 			['true|false', "return 'BOOLEAN_VALUE'"],
 			['([0-9]+[.])?[0-9]+', "return 'NUMBER_VALUE'"],
 
-			['[a-zA-Z_][a-zA-Z0-9_]*', "return 'IDENTIFICATOR'"]
+			[AbstractSyntaxTree.VALID_IDENTIFICATOR_REGEX, "return 'IDENTIFICATOR'"]
 		]
 	},
 	'operators': [
@@ -218,23 +249,21 @@ export const GRAMMAR = {
 		],
 		'command': [
 			['single_command', '$$ = $1'],
-			['declaration command_separator command', '$$ = new yy.AST.CommandNode([$1, $3], yy.AST.CommandKind.DECLARATION_COMMAND)'],
-			['command command_separator command', '$$ = new yy.AST.CommandNode([$1, $3], yy.AST.CommandKind.COMMAND_COMMAND)']
+			['declaration command_separator command', '$$ = new yy.AST.CommandNode([$1, $3], yy.AST.CommandKind.DECLARATION_COMMAND, $1.block.union($3.block))'],
+			['command command_separator command', '$$ = new yy.AST.CommandNode([$1, $3], yy.AST.CommandKind.COMMAND_COMMAND, $1.block.union($3.block))']
 		],
 		'single_command': [
-			['', '$$ = new yy.AST.CommandNode([], yy.AST.CommandKind.NIL)'],
+			['', '$$ = new yy.AST.CommandNode([], yy.AST.CommandKind.NIL), new yy.AST.Block(@1.firstLine, @1.firstColumn, @1.lastLine, @1.lastColumn)'],
 			['identificator = expression', '$$ = new yy.AST.CommandNode([$1, $3], yy.AST.CommandKind.ASSIGNMENT)'],
-			['IF expression THEN command_body', '$$ = new yy.AST.CommandNode([$3, $6], yy.AST.CommandKind.IF)'],
-			['IF expression THEN command_body ELSE command_body', '$$ = new yy.AST.CommandNode([$3, $6, $10], yy.AST.CommandKind.IF_ELSE)'],
-			['WHILE expression DO command_body', '$$ = new yy.AST.CommandNode([$2, $6], yy.AST.CommandKind.WHILE)'],
+			['IF expression THEN command_body ELSE command_body', '$$ = new yy.AST.CommandNode([$2, $4, $6], yy.AST.CommandKind.IF_ELSE)'],
+			['IF expression THEN command_body', '$$ = new yy.AST.CommandNode([$2, $4], yy.AST.CommandKind.IF)'],
+			['WHILE expression DO command_body', '$$ = new yy.AST.CommandNode([$2, $4], yy.AST.CommandKind.WHILE)'],
 			['PRINT expression', '$$ = new yy.AST.CommandNode([$2], yy.AST.CommandKind.PRINT)'],
 			[
-				'FOR declaration , expression , single_command DO command_body',
-				`$$ = new yy.AST.CommandNode([$2,
-					new yy.AST.CommandNode([$4,
-						new yy.AST.CommandNode([$11,
-							new yy.AST.CommandNode([$6, $8], yy.AST.CommandKind.ASSIGNMENT)
-						], yy.AST.CommandKind.COMMAND_COMMAND)
+				'FOR ( declaration , expression , single_command ) DO command_body',
+				`$$ = new yy.AST.CommandNode([$3,
+					new yy.AST.CommandNode([$5,
+						new yy.AST.CommandNode([$10, $7], yy.AST.CommandKind.COMMAND_COMMAND)
 					], yy.AST.CommandKind.WHILE),
 				], yy.AST.CommandKind.DECLARATION_COMMAND)`
 			],
@@ -245,8 +274,8 @@ export const GRAMMAR = {
 		],
 		'declaration': [
 			['', '$$ = new yy.AST.DeclarationNode([], yy.AST.DeclarationKind.NIL)'],
-			['LET : type identificator = expression', '$$ = new yy.AST.DeclarationNode([$3, $4, $6], yy.AST.DeclarationKind.VARIABLE)'],
-			['CONST : type identificator = expression', '$$ = new yy.AST.DeclarationNode([$3, $4, $6], yy.AST.DeclarationKind.CONSTANT)'],
+			['LET identificator : type = expression', '$$ = new yy.AST.DeclarationNode([$2, $4, $6], yy.AST.DeclarationKind.VARIABLE)'],
+			['CONST identificator : type = expression', '$$ = new yy.AST.DeclarationNode([$2, $4, $6], yy.AST.DeclarationKind.CONSTANT)'],
 			['declaration command_separator declaration', '$$ = new yy.AST.DeclarationNode([$1, $3], yy.AST.DeclarationKind.DECLARATION_DECLARATION)']
 		],
 		'expression': [
